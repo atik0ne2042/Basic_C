@@ -1,0 +1,61 @@
+name: Daily Scheduled Code Push
+
+on:
+  schedule:
+    # 11:00 AM BST (UTC+6) -> 05:00 UTC
+    - cron: '0 5 * * *'
+    # 08:00 PM BST (UTC+6) -> 14:00 UTC
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  push_code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Pick Next Code File from Queue
+        id: pick_file
+        run: |
+          mkdir -p queue
+          # Find the first pending file in queue (ignoring hidden files)
+          NEXT_FILE=$(ls -1 queue 2>/dev/null | grep -v '^\.' | sort -V | head -n 1)
+
+          if [ -z "$NEXT_FILE" ]; then
+            echo "Queue is empty! No files to publish."
+            echo "has_file=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Found file in queue: $NEXT_FILE"
+
+          # Remove numeric prefix (e.g., 01_filename.c -> filename.c)
+          TARGET_NAME=$(echo "$NEXT_FILE" | sed -E 's/^[0-9]+_//')
+
+          # Move the file from queue to repository root
+          mv "queue/$NEXT_FILE" "./$TARGET_NAME"
+
+          echo "has_file=true" >> "$GITHUB_OUTPUT"
+          echo "file_name=$TARGET_NAME" >> "$GITHUB_OUTPUT"
+          echo "queue_name=$NEXT_FILE" >> "$GITHUB_OUTPUT
+
+      - name: Commit and Push
+        if: steps.pick_file.outputs.has_file == 'true'
+        run: |
+          git config --global user.name "atik0ne2042"
+          git config --global user.email "arfinapon33@gmail.com"
+
+          TARGET_NAME="${{ steps.pick_file.outputs.file_name }}"
+          QUEUE_NAME="${{ steps.pick_file.outputs.queue_name }}"
+
+          git add "queue/$QUEUE_NAME" "./$TARGET_NAME"
+          git commit -m "feat: Add $TARGET_NAME (Daily scheduled upload)"
+          git pull --rebase origin main || true
+          git push origin main

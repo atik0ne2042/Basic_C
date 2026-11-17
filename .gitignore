@@ -1,0 +1,10 @@
+# Compiled binaries / executables
+*.o
+*.out
+*.exe
+*.app
+
+# macOS files
+.DS_Store
+.AppleDouble
+.LSOverride
